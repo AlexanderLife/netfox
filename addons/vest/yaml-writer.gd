@@ -17,50 +17,62 @@ class_name YAMLWriter
 static func stringify(what, indent: int = 0) -> String:
 	if indent > 0:
 		return _indented(stringify(what), indent)
-
-	var type := typeof(what)
-
-	if what == null:
-		return "null"
-
-	if type == TYPE_INT or type == TYPE_FLOAT:
-		return str(what)
-
-	if what is String or what is StringName or what is NodePath:
-		what = str(what)
-		if not what.contains("\n") and not what.contains("\"") and what.strip_edges() == what:
-			return what
-		return "\"%s\"" % what.c_escape()
-
-	if _is_packed_array(what):
-		what = Array(what)
-
-	if what is Array:
-		var result = (what
+	
+	match typeof(what):
+		TYPE_NIL:
+			return "null"
+		
+		TYPE_INT,TYPE_FLOAT,TYPE_BOOL:
+			return str(what)
+		
+		TYPE_STRING,TYPE_STRING_NAME,TYPE_NODE_PATH:
+			what = str(what)
+			if		(not what.contains("\n")) and								\
+					(not what.contains("\"")) and								\
+					(what.strip_edges() == what):
+				return what
+			return "\"%s\"" % what.c_escape()
+		
+		TYPE_PACKED_BYTE_ARRAY,													\
+		TYPE_PACKED_INT32_ARRAY,												\
+		TYPE_PACKED_INT64_ARRAY,												\
+		TYPE_PACKED_FLOAT32_ARRAY,												\
+		TYPE_PACKED_FLOAT64_ARRAY,												\
+		TYPE_PACKED_STRING_ARRAY,												\
+		TYPE_PACKED_VECTOR2_ARRAY,												\
+		TYPE_PACKED_VECTOR3_ARRAY,												\
+		TYPE_PACKED_COLOR_ARRAY,												\
+		TYPE_PACKED_VECTOR4_ARRAY,												\
+		TYPE_ARRAY:
+			what = Array(what)
+			var result = (what
 			.map(func(it): return stringify(it))
 			.map(func(it): return _indented_value(it, 2))
 			.map(func(it): return "- " + it)
-		)
-		return "\n".join(result)
-
-	if what is Dictionary:
-		var result := PackedStringArray()
-		for key in what.keys():
-			var value = what.get(key)
-
-			var stringified_key := _stringify_key(key)
-			stringified_key = stringified_key
-			var stringified_value := _stringify_value(value)
-
-			result.append("%s: %s" % [stringified_key, stringified_value])
-		return "\n".join(result)
-
-	if what is Object:
-		if what.has_method("_to_yaml"):
-			return stringify(what.call("_to_yaml", indent))
-		elif what.has_method("_to_yaml_raw"):
-			return what.call("_to_yaml_raw", indent)
-
+			)
+			return "\n".join(result)
+		
+		TYPE_DICTIONARY:
+			var result : PackedStringArray = []
+			for key in what.keys():
+				var value = what.get(key)
+				result.append("%s: %s" % [_stringify_key(key), _stringify_value(value)])
+			return "\n".join(result)
+		
+		TYPE_OBJECT:
+			if what.has_method("_to_yaml"):
+				return stringify(what.call("_to_yaml", indent))
+			elif what.has_method("_to_yaml_raw"):
+				return what.call("_to_yaml_raw", indent)
+		
+		TYPE_VECTOR2,TYPE_VECTOR2I,TYPE_RECT2,									\
+		TYPE_RECT2I,TYPE_VECTOR3,TYPE_VECTOR3I,									\
+		TYPE_TRANSFORM2D,TYPE_VECTOR4,TYPE_VECTOR4I,							\
+		TYPE_PLANE,TYPE_QUATERNION,TYPE_AABB,									\
+		TYPE_BASIS,TYPE_TRANSFORM3D,TYPE_PROJECTION,							\
+		TYPE_RID,TYPE_CALLABLE,TYPE_SIGNAL,										\
+		TYPE_MAX,_:
+			pass
 	return stringify(str(what))
 
 static func _indented(what: String, level: int) -> String:
@@ -80,37 +92,17 @@ static func _indented_value(what: String, level: int) -> String:
 		return "\n" + _indented(what, level)
 
 static func _stringify_key(what) -> String:
-	match typeof(what):
-		TYPE_FLOAT: return str(what)
-		TYPE_INT: return str(what)
-		TYPE_STRING:
-			if RegEx.create_from_string("[\\s\"']").search(what):
-				return stringify(what)
-			else:
-				return what
-		_: return stringify(str(what))
+	if typeof(what) == TYPE_STRING:
+		if RegEx.create_from_string("[\\s\"']").search(what):
+			return stringify(what)
+		else:
+			return what
+	return stringify(str(what))
 
 static func _stringify_value(what) -> String:
-	if _is_complex(what):
+	if		what is Array or													\
+			what is Dictionary or												\
+			what is Object:
 		return "\n" + stringify(what, 2)
 	return stringify(what)
-
-static func _is_complex(what) -> bool:
-	return (
-		what is Array or
-		what is Dictionary or
-		what is Object
-	)
-
-static func _is_packed_array(what) -> bool:
-	return (
-		what is PackedByteArray or
-		what is PackedColorArray or
-		what is PackedFloat32Array or
-		what is PackedFloat64Array or
-		what is PackedInt32Array or
-		what is PackedInt64Array or
-		what is PackedStringArray or
-		what is PackedVector2Array or
-		what is PackedVector3Array
-	)
+	
